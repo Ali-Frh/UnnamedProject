@@ -33,3 +33,4 @@ add_user() {
     sqlite3 "$DB" "INSERT INTO users (username, password, quota, speed, created_at, expired_at) VALUES ('$username', '$password', '$quota', '$speed', '$created_at', '$expired_at');"
     echo -e "${GREEN}User '$username' added successfully!${NC}"
 }
+add_user
