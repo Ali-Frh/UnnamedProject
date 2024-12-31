@@ -12,6 +12,8 @@ initialize_db() {
         speed INTEGER NOT NULL,
         used INTEGER DEFAULT 0,
         created_at TEXT NOT NULL,
+                expired_at TEXT NOT NULL,
+
         password TEXT NOT NULL
     );"
 }
