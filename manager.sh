@@ -1,8 +1,82 @@
 #!/bin/bash
 
+# Database file
 DB="users.db"
 
-# Initialize SQLite database
+# Validity period in days (e.g., 30 days)
+VALIDITY_PERIOD=30
+
+# ANSI color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Function to convert bytes to human-readable format
+human_readable() {
+    local bytes=$1
+    if [[ $bytes -ge 1073741824 ]]; then
+        echo "$(( bytes / 1073741824 )) GB"
+    elif [[ $bytes -ge 1048576 ]]; then
+        echo "$(( bytes / 1048576 )) MB"
+    elif [[ $bytes -ge 1024 ]]; then
+        echo "$(( bytes / 1024 )) KB"
+    else
+        echo "$bytes bytes"
+    fi
+}
+
+# Function to calculate remaining days
+calculate_remaining_days() {
+    local created_date=$1
+    local current_date=$(date +%Y-%m-%d)
+    local remaining_days=$(( ($(date -d "$created_date" +%s) - $(date -d "$current_date" +%s)) / 86400 ))
+    echo $remaining_days
+}
+
+# Function to list all users with colored output
+list_users() {
+    echo -e "${BLUE}Listing all users:${NC}"
+    echo -e "${GREEN}---------------------------------------------------------------${NC}"
+    
+    # Fetch all users from the database
+    users=$(sqlite3 "$DB" "SELECT username, quota, speed, created_date, used_traffic FROM users;")
+    
+    # Check if there are any users
+    if [[ -z "$users" ]]; then
+        echo -e "${RED}No users found.${NC}"
+        return
+    fi
+
+    # Print each user with colored output
+    echo -e "${CYAN}Username\tQuota\t\tSpeed\tCreated Date\tUsed Traffic\tStatus${NC}"
+    echo -e "${GREEN}---------------------------------------------------------------${NC}"
+    while IFS='|' read -r username quota speed created_date used_traffic; do
+        remaining_days=$(calculate_remaining_days "$created_date")
+        remaining_quota=$(( quota - used_traffic ))
+
+        # Convert quota and used traffic to human-readable format
+        quota_hr=$(human_readable "$quota")
+        used_traffic_hr=$(human_readable "$used_traffic")
+        remaining_quota_hr=$(human_readable "$remaining_quota")
+
+        # Determine status
+        if [[ $remaining_days -lt 0 ]]; then
+            status="${RED}Expired (Time)${NC}"
+        elif [[ $remaining_quota -le 0 ]]; then
+            status="${RED}Expired (Quota)${NC}"
+        else
+            status="${GREEN}Active (${remaining_days} days, ${remaining_quota_hr} left)${NC}"
+        fi
+
+        echo -e "${YELLOW}$username\t${MAGENTA}$quota_hr\t${CYAN}$speed\t${GREEN}$created_date\t${RED}$used_traffic_hr\t${status}${NC}"
+    done <<< "$users"
+}
+
+# Initialize database
 initialize_db() {
     sqlite3 "$DB" "CREATE TABLE IF NOT EXISTS users (
         username TEXT PRIMARY KEY,
@@ -13,146 +87,5 @@ initialize_db() {
     );"
 }
 
-# Add a user
-add_user() {
-    local username=$1
-    local quota=$2
-    local speed=$3
-    local date=$4
-
-    # Convert quota to bytes (e.g., 10MB -> 10485760)
-    if [[ $quota =~ [0-9]+[mM][bB] ]]; then
-        quota=$(echo "${quota%[mM][bB]} * 1024 * 1024" | bc)
-    fi
-
-    sqlite3 "$DB" "INSERT INTO users (username, quota, speed, created_date) VALUES ('$username', $quota, $speed, '$date');"
-    echo "User $username added with quota $quota bytes, speed $speed MB/s, and date $date."
-}
-
-# Get usage and remaining days
-get_usage() {
-    local username=$1
-    local current_date=$(date +%Y-%m-%d)
-    local created_date=$(sqlite3 "$DB" "SELECT created_date FROM users WHERE username='$username';")
-    local used_traffic=$(sqlite3 "$DB" "SELECT used_traffic FROM users WHERE username='$username';")
-    local quota=$(sqlite3 "$DB" "SELECT quota FROM users WHERE username='$username';")
-
-    if [[ -z $created_date ]]; then
-        echo "User $username not found."
-        return
-    fi
-
-    # Calculate remaining days
-    local remaining_days=$(( ($(date -d "$current_date" +%s) - $(date -d "$created_date" +%s)) / 86400 ))
-    local remaining_traffic=$(( quota - used_traffic ))
-
-    echo "User: $username"
-    echo "Used Traffic: $used_traffic bytes"
-    echo "Remaining Traffic: $remaining_traffic bytes"
-    echo "Remaining Days: $remaining_days"
-}
-
-# Delete a user
-delete_user() {
-    local username=$1
-    sqlite3 "$DB" "DELETE FROM users WHERE username='$username';"
-    echo "User $username deleted."
-}
-
-# Edit user quota
-edit_quota() {
-    local username=$1
-    local new_quota=$2
-
-    # Convert quota to bytes (e.g., 10MB -> 10485760)
-    if [[ $new_quota =~ [0-9]+[mM][bB] ]]; then
-        new_quota=$(echo "${new_quota%[mM][bB]} * 1024 * 1024" | bc)
-    fi
-
-    sqlite3 "$DB" "UPDATE users SET quota=$new_quota WHERE username='$username';"
-    echo "Quota for user $username updated to $new_quota bytes."
-}
-
-# Main menu
-menu() {
-    echo "1. Add User"
-    echo "2. Get Usage"
-    echo "3. Delete User"
-    echo "4. Edit Quota"
-    echo "5. Exit"
-    read -p "Choose an option: " choice
-
-    case $choice in
-        1)
-            read -p "Username: " username
-            read -p "Quota (e.g., 10MB): " quota
-            read -p "Speed (MB/s): " speed
-            read -p "Date (YYYY-MM-DD): " date
-            add_user "$username" "$quota" "$speed" "$date"
-            ;;
-        2)
-            read -p "Username: " username
-            get_usage "$username"
-            ;;
-        3)
-            read -p "Username: " username
-            delete_user "$username"
-            ;;
-        4)
-            read -p "Username: " username
-            read -p "New Quota (e.g., 10MB): " new_quota
-            edit_quota "$username" "$new_quota"
-            ;;
-        5)
-            exit 0
-            ;;
-        *)
-            echo "Invalid option. Try again."
-            ;;
-    esac
-}
-
-# Initialize database
 initialize_db
-
-# Command-line arguments
-if [[ $# -ge 1 ]]; then
-    case $1 in
-        adduser)
-            if [[ $# -eq 5 ]]; then
-                add_user "$2" "$3" "$4" "$5"
-            else
-                echo "Usage: $0 adduser <username> <quota> <speed> <date>"
-            fi
-            ;;
-        getusage)
-            if [[ $# -eq 2 ]]; then
-                get_usage "$2"
-            else
-                echo "Usage: $0 getusage <username>"
-            fi
-            ;;
-        deleteuser)
-            if [[ $# -eq 2 ]]; then
-                delete_user "$2"
-            else
-                echo "Usage: $0 deleteuser <username>"
-            fi
-            ;;
-        editquota)
-            if [[ $# -eq 3 ]]; then
-                edit_quota "$2" "$3"
-            else
-                echo "Usage: $0 editquota <username> <new_quota>"
-            fi
-            ;;
-        *)
-            echo "Invalid command. Use adduser, getusage, deleteuser, or editquota."
-            ;;
-    esac
-else
-    # Show menu if no arguments are provided
-    while true; do
-        menu
-    done
-fi
+list_users
