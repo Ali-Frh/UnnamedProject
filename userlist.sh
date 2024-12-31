@@ -1,4 +1,4 @@
- #!/bin/bash
+#!/bin/bash
 
 # Database file
 DB="users.db"
@@ -15,18 +15,32 @@ MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
+# Function to convert bytes to human-readable format
+human_readable() {
+    local bytes=$1
+    if [[ $bytes -ge 1073741824 ]]; then
+        echo "$(( bytes / 1073741824 )) GB"
+    elif [[ $bytes -ge 1048576 ]]; then
+        echo "$(( bytes / 1048576 )) MB"
+    elif [[ $bytes -ge 1024 ]]; then
+        echo "$(( bytes / 1024 )) KB"
+    else
+        echo "$bytes bytes"
+    fi
+}
+
 # Function to calculate remaining days
 calculate_remaining_days() {
     local created_date=$1
     local current_date=$(date +%Y-%m-%d)
-    local remaining_days=$(( ($(date -d "$current_date" +%s) - $(date -d "$created_date" +%s)) / 86400 ))
-    echo $(( VALIDITY_PERIOD - remaining_days ))
+    local remaining_days=$(( ($(date -d "$created_date" +%s) - $(date -d "$current_date" +%s)) / 86400 ))
+    echo $remaining_days
 }
 
 # Function to list all users with colored output
 list_users() {
     echo -e "${BLUE}Listing all users:${NC}"
-    echo -e "${GREEN}---------------------------------------------------------------${NC}"
+    echo -e "${GREEN}----------------------------------------------------------------------------------------${NC}"
     
     # Fetch all users from the database
     users=$(sqlite3 "$DB" "SELECT username, quota, speed, created_date, used_traffic FROM users;")
@@ -37,17 +51,38 @@ list_users() {
         return
     fi
 
+    # Print table header
+    printf "%-15s %-15s %-10s %-15s %-15s %-20s\n" \
+        "Username" "Quota" "Speed" "Created Date" "Used Traffic" "Status"
+    echo -e "${GREEN}----------------------------------------------------------------------------------------${NC}"
+
     # Print each user with colored output
-    echo -e "${CYAN}Username\tQuota\t\tSpeed\tCreated Date\tUsed Traffic\tStatus${NC}"
-    echo -e "${GREEN}---------------------------------------------------------------${NC}"
     while IFS='|' read -r username quota speed created_date used_traffic; do
         remaining_days=$(calculate_remaining_days "$created_date")
+        remaining_quota=$(( quota - used_traffic ))
+
+        # Convert quota and used traffic to human-readable format
+        quota_hr=$(human_readable "$quota")
+        used_traffic_hr=$(human_readable "$used_traffic")
+        remaining_quota_hr=$(human_readable "$remaining_quota")
+
+        # Determine status
         if [[ $remaining_days -lt 0 ]]; then
-            status="${RED}Expired${NC}"
+            status="${RED}Expired (Time)${NC}"
+        elif [[ $remaining_quota -le 0 ]]; then
+            status="${RED}Expired (Quota)${NC}"
         else
-            status="${GREEN}Active (${remaining_days} days left)${NC}"
+            status="${GREEN}Active (${remaining_days} days, ${remaining_quota_hr} left)${NC}"
         fi
-        echo -e "${YELLOW}$username\t${MAGENTA}$quota\t${CYAN}$speed\t${GREEN}$created_date\t${RED}$used_traffic\t${status}${NC}"
+
+        # Print user details with proper alignment
+        printf "%-15s %-15s %-10s %-15s %-15s %-20s\n" \
+            "${YELLOW}$username${NC}" \
+            "${MAGENTA}$quota_hr${NC}" \
+            "${CYAN}$speed${NC}" \
+            "${GREEN}$created_date${NC}" \
+            "${RED}$used_traffic_hr${NC}" \
+            "$status"
     done <<< "$users"
 }
 
