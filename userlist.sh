@@ -31,9 +31,9 @@ human_readable() {
 
 # Function to calculate remaining days
 calculate_remaining_days() {
-    local created_date=$1
+    local created_at=$1
     local current_date=$(date +%Y-%m-%d)
-    local remaining_days=$(( (VALIDITY_PERIOD - ($(date -d "$current_date" +%s) - $(date -d "$created_date" +%s)) / 86400) ))
+    local remaining_days=$(( (VALIDITY_PERIOD - ($(date -d "$current_date" +%s) - $(date -d "$created_at" +%s)) / 86400) ))
     echo $remaining_days
 }
 
@@ -57,7 +57,7 @@ list_users() {
     echo -e "${GREEN}----------------------------------------------------------------------------------------${NC}"
     
     # Fetch all users from the database
-    users=$(sqlite3 "$DB" "SELECT username, quota, speed, created_date FROM users;")
+    users=$(sqlite3 "$DB" "SELECT username, quota, speed, created_at FROM users;")
     
     # Check if there are any users
     if [[ -z "$users" ]]; then
@@ -71,10 +71,10 @@ list_users() {
     echo -e "${GREEN}----------------------------------------------------------------------------------------${NC}"
 
     # Print each user with colored output
-    while IFS='|' read -r username quota speed created_date; do
+    while IFS='|' read -r username quota speed created_at; do
         used_traffic=$(get_used_traffic "$username")
         left_traffic=$(( quota - used_traffic ))
-        remaining_days=$(calculate_remaining_days "$created_date")
+        remaining_days=$(calculate_remaining_days "$created_at")
 
         # Convert quota, used traffic, and left traffic to human-readable format
         quota_hr=$(human_readable "$quota")
@@ -99,7 +99,7 @@ list_users() {
             "${YELLOW}$username${NC}" \
             "${MAGENTA}$quota_hr${NC}" \
             "${CYAN}$speed${NC}" \
-            "${GREEN}$created_date${NC}" \
+            "${GREEN}$created_at${NC}" \
             "${RED}$used_traffic_hr${NC}" \
             "${MAGENTA}$left_traffic_hr${NC}" \
             "$status"
@@ -112,7 +112,7 @@ initialize_db() {
         username TEXT PRIMARY KEY,
         quota INTEGER,
         speed INTEGER,
-        created_date TEXT
+        created_at TEXT
     );"
 }
 
