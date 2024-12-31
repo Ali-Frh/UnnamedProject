@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Database file
-DB_FILE="traffic_db.sqlite"
+DB_FILE="users.db"
 
 # Initialize SQLite database
 initialize_db() {
