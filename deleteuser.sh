@@ -7,3 +7,4 @@ delete_user() {
     sqlite3 "$DB" "DELETE FROM users WHERE username='$username';"
     echo -e "${GREEN}User '$username' deleted successfully!${NC}"
 }
+delete_user
