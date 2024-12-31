@@ -9,7 +9,8 @@ initialize_db() {
         quota INTEGER,
         speed INTEGER,
         created_date TEXT,
-        used_traffic INTEGER DEFAULT 0
+        used_traffic INTEGER DEFAULT 0,
+        password TEXT
     );"
 }
 
@@ -19,14 +20,16 @@ add_user() {
     local quota=$2
     local speed=$3
     local date=$4
+    local password=$5
 
     # Convert quota to bytes (e.g., 10MB -> 10485760)
     if [[ $quota =~ [0-9]+[mM][bB] ]]; then
         quota=$(echo "${quota%[mM][bB]} * 1024 * 1024" | bc)
     fi
 
-    sqlite3 "$DB" "INSERT INTO users (username, quota, speed, created_date) VALUES ('$username', $quota, $speed, '$date');"
-    echo "User $username added with quota $quota bytes, speed $speed MB/s, and date $date."
+    # Insert user into the database
+    sqlite3 "$DB" "INSERT INTO users (username, quota, speed, created_date, password) VALUES ('$username', $quota, $speed, '$date', '$password');"
+    echo "User $username added with quota $quota bytes, speed $speed MB/s, date $date, and password $password."
 }
 
 # Get usage and remaining days
@@ -88,7 +91,8 @@ menu() {
             read -p "Quota (e.g., 10MB): " quota
             read -p "Speed (MB/s): " speed
             read -p "Date (YYYY-MM-DD): " date
-            add_user "$username" "$quota" "$speed" "$date"
+            read -p "Password: " password
+            add_user "$username" "$quota" "$speed" "$date" "$password"
             ;;
         2)
             read -p "Username: " username
@@ -119,10 +123,10 @@ initialize_db
 if [[ $# -ge 1 ]]; then
     case $1 in
         adduser)
-            if [[ $# -eq 5 ]]; then
-                add_user "$2" "$3" "$4" "$5"
+            if [[ $# -eq 6 ]]; then
+                add_user "$2" "$3" "$4" "$5" "$6"
             else
-                echo "Usage: $0 adduser <username> <quota> <speed> <date>"
+                echo "Usage: $0 adduser <username> <quota> <speed> <date> <password>"
             fi
             ;;
         getusage)
