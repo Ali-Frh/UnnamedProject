@@ -34,7 +34,7 @@ add_user() {
     quota_bytes=$((quota * 1024 * 1024))
 
     # Create SSH user
-    useradd -m -s /bin/bash "$username"
+    useradd -m -s /usr/sbin/nologin "$username"
     echo "$username:$password" | chpasswd
 
     # Insert into database
